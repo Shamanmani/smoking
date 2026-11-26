@@ -299,7 +299,7 @@ function fmtClock(sec) {
   var TIPS = ['להסתכל על הדחף בלי לעשות איתו כלום.', 'לשתות מים לאט.', 'לקום ולשנות מקום.', 'שלוש נשימות עמוקות.', 'לנער את הידיים, לפתוח את הכתפיים.', 'לשים לב איפה בגוף הדחף יושב.'];
   var storageOk = true;
   var S;
-  var ui = { screen: 'home', ctx: null, toast: '', confirmDel: false, confirmRestore: false, confirmCloudDel: false };
+  var ui = { screen: 'home', ctx: null, toast: '', confirmDel: false, confirmRestore: false, confirmCloudDel: false, devTaps: 0 };
   var tickId = null, wake = null;
 
   function load() {
@@ -509,7 +509,7 @@ function fmtClock(sec) {
   }
   function screenSettings() {
     var backup = JSON.stringify({ stage: S.stage, events: S.events });
-    var h = '<main><h2>הגדרות</h2><div class="card"><p><strong>שלב</strong></p><div class="stepper"><button class="btn" data-act="stage-minus" aria-label="שלב קודם">−</button><span class="val">' + esc(stageLabel()) + '</span><button class="btn" data-act="stage-plus" aria-label="שלב הבא">+</button></div>' +
+    var h = '<main><h2 data-act="dev-tap">הגדרות</h2><div class="card"><p><strong>שלב</strong></p><div class="stepper"><button class="btn" data-act="stage-minus" aria-label="שלב קודם">−</button><span class="val">' + esc(stageLabel()) + '</span><button class="btn" data-act="stage-plus" aria-label="שלב הבא">+</button></div>' +
       '<p class="quiet">מיפוי: רישום בלי טיימר, שבעה ימים בדיוק, ואז עוברים אוטומטית לשלב 1. אחר כך כל שלב הוא משך הטיימר בדקות, עד 15. הטיימר משתנה סביב הערך הזה, ואתה קובע מתי לעלות.</p>' + (S.stage === 0 ? '<button class="btn small" data-act="map-restart">התחל את שבוע המיפוי מחדש מהיום</button>' : '') + '</div>';
     h += '<div class="card"><label class="switch"><span>פתיחה מהירה: האפליקציה נפתחת ישר לטיימר</span><input type="checkbox" id="quick"' + (S.quick ? ' checked' : '') + '></label>' +
       '<p class="quiet">לשימוש עם קיצור במסך הבית. אפשר תמיד לבטל את הטיימר.</p></div>';
@@ -521,7 +521,8 @@ function fmtClock(sec) {
     }
     h += '<div class="card"><p><strong>גיבוי</strong></p><p class="quiet">הנתונים נשמרים בדפדפן בטלפון הזה בלבד. העתק את הטקסט ושמור אותו אצלך.</p><textarea id="bk" readonly>' + esc(backup) + '</textarea><div class="row"><button class="btn small" data-act="copy-bk">העתק</button></div>' +
       '<p class="quiet">שחזור: הדבק גיבוי כאן.</p><textarea id="rs" placeholder="הדבק כאן"></textarea><button class="btn small" data-act="restore">' + (ui.confirmRestore ? 'לחץ שוב לאישור, זה מחליף את הנתונים הקיימים' : 'שחזר') + '</button></div>';
-    h += '<div class="card"><button class="btn ghost" data-act="wipe">' + (ui.confirmDel ? 'לחץ שוב לאישור מחיקה סופית' : 'מחיקת כל הנתונים') + '</button></div><p class="quiet">רגע הוא כלי עזר בלבד: טיימר ומעקב. הוא אינו ייעוץ רפואי ואינו תחליף לטיפול.</p></main>';
+    h += '<div class="card"><button class="btn ghost" data-act="wipe">' + (ui.confirmDel ? 'לחץ שוב לאישור מחיקה סופית' : 'מחיקת כל הנתונים') + '</button></div><p class="quiet">רגע הוא כלי עזר בלבד: טיימר ומעקב. הוא אינו ייעוץ רפואי ואינו תחליף לטיפול.</p>' +
+      (ui.devTaps >= 7 ? '<div class="card"><p><strong>למפתח</strong></p><p class="quiet">מאפס את כל הנתונים וההגדרות בטלפון הזה, כולל בחירת השיתוף, ופותח את האפליקציה כמו בפעם הראשונה. מה ששותף כבר לשרת נשאר שם.</p><button class="btn small" data-act="dev-reset">איפוס מלא לבדיקה</button></div>' : '') + '</main>';
     return h;
   }
 
@@ -592,6 +593,14 @@ function fmtClock(sec) {
       case 'cloud-delete':
         if (!ui.confirmCloudDel) { ui.confirmCloudDel = true; render(); break; }
         deleteCloud();
+        break;
+      case 'dev-tap': ui.devTaps++; if (ui.devTaps === 7) { render(); toast('מצב מפתח'); } break;
+      case 'dev-reset':
+        stopTick(); releaseWake();
+        try { localStorage.removeItem(KEY); } catch (e) {}
+        S = normalize({}); ui.screen = 'home'; ui.ctx = null; ui.toast = ''; ui.devTaps = 0;
+        ui.confirmDel = false; ui.confirmRestore = false; ui.confirmCloudDel = false;
+        checkMapping(); save(); render();
         break;
       case 'notice-ok': S.mapNotice = false; save(); render(); break;
       case 'map-restart': S.stage = 0; S.mapStart = dayIdx(Date.now()); S.mapNotice = false; save(); toast('שבוע המיפוי התחיל מהיום.'); break;
