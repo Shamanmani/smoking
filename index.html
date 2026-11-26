@@ -176,6 +176,24 @@ function expectVsActual(events, lastN) {
 }
 var MAP_DAYS = 7;
 function mapDay(mapStart, nowTs) { return mapStart == null ? 1 : dayIdx(nowTs) - mapStart + 1; }
+function normShare(s) {
+  s = (s && typeof s === 'object') ? s : {};
+  return {
+    on: !!s.on,
+    asked: !!s.asked,
+    id: (typeof s.id === 'string' && /^[0-9a-f-]{8,64}$/i.test(s.id)) ? s.id : '',
+    lastSent: (typeof s.lastSent === 'number' && isFinite(s.lastSent) && s.lastSent > 0) ? s.lastSent : 0
+  };
+}
+/* the ONLY fields that ever leave the phone (and only with consent): no free text, no ratings */
+function eventRow(uid, e) {
+  return {
+    uid: uid, ev_t: e.t, kind: e.kind,
+    trigger: e.trigger || null,
+    stage: (typeof e.stage === 'number') ? e.stage : null,
+    timer_sec: (typeof e.timerSec === 'number') ? e.timerSec : null
+  };
+}
 function clampInt(v, lo, hi, def) { v = Number(v); if (!isFinite(v)) return def; v = Math.round(v); return Math.max(lo, Math.min(hi, v)); }
 function validEvent(e) {
   if (!e || typeof e !== 'object') return false;
@@ -189,6 +207,7 @@ function cleanEvent(e) {
   if (o.trigger === 'אחר' && typeof e.note === 'string' && e.note.trim()) o.note = e.note.trim().slice(0, 80);
   if (typeof e.expect === 'number' && e.expect >= 0 && e.expect <= 10) o.expect = Math.round(e.expect);
   if (typeof e.actual === 'number' && e.actual >= 0 && e.actual <= 10) o.actual = Math.round(e.actual);
+  if (typeof e.stage === 'number' && e.stage >= 0 && e.stage <= 15) o.stage = Math.round(e.stage);
   if (typeof e.timerSec === 'number' && e.timerSec >= 0 && e.timerSec < 86400) o.timerSec = Math.round(e.timerSec);
   return o;
 }
@@ -201,6 +220,7 @@ function normalize(o) {
     quick: !!o.quick,
     mapStart: (typeof o.mapStart === 'number' && isFinite(o.mapStart)) ? Math.round(o.mapStart) : null,
     mapNotice: !!o.mapNotice,
+    share: normShare(o.share),
     lastStyle: typeof o.lastStyle === 'string' ? o.lastStyle : '',
     events: Array.isArray(o.events) ? o.events.filter(validEvent).map(cleanEvent) : [],
     active: okAct ? { start: act.start, dur: act.dur, style: typeof act.style === 'string' ? act.style : 'ring', tip: typeof act.tip === 'number' ? act.tip : 0 } : null
@@ -216,11 +236,53 @@ function fmtClock(sec) {
 <script id="appjs">
 (function () {
   var KEY = 'raga.v1';
+  /* Cloud sharing stays hidden until both values are filled in (Supabase project URL + publishable key). */
+  var CLOUD = { url: '', key: '' };
+  function cloudOn() { return !!(CLOUD.url && CLOUD.key); }
+  var sending = false;
+  function newId() {
+    try { if (window.crypto && crypto.randomUUID) return crypto.randomUUID(); } catch (e) {}
+    var s = ''; for (var i = 0; i < 32; i++) s += Math.floor(Math.random() * 16).toString(16); return s;
+  }
+  function cloudHeaders(extra) {
+    var o = { apikey: CLOUD.key, Authorization: 'Bearer ' + CLOUD.key, 'Content-Type': 'application/json' };
+    for (var k in (extra || {})) o[k] = extra[k];
+    return o;
+  }
+  function flush() {
+    if (!cloudOn() || !S.share.on || !S.share.id || sending) return;
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+    var evs = S.events.filter(function (e) { return e.t > S.share.lastSent; }).sort(function (a, b) { return a.t - b.t; });
+    if (!evs.length) return;
+    var batch = evs.slice(0, 200), uid = S.share.id;
+    sending = true;
+    fetch(CLOUD.url + '/rest/v1/events?on_conflict=uid,ev_t', {
+      method: 'POST',
+      headers: cloudHeaders({ Prefer: 'resolution=ignore-duplicates,return=minimal' }),
+      body: JSON.stringify(batch.map(function (e) { return eventRow(uid, e); }))
+    }).then(function (r) {
+      if (!r.ok) throw new Error('http ' + r.status);
+      if (S.share.id === uid) { S.share.lastSent = batch[batch.length - 1].t; save(); }
+      sending = false;
+      if (evs.length > batch.length) flush();
+    }).catch(function () { sending = false; });
+  }
+  function deleteCloud() {
+    var uid = S.share.id;
+    if (!uid) { toast('אין מה למחוק.'); return; }
+    fetch(CLOUD.url + '/rest/v1/rpc/delete_my_data', { method: 'POST', headers: cloudHeaders(), body: JSON.stringify({ p_uid: uid }) })
+      .then(function (r) {
+        if (!r.ok) throw new Error('http ' + r.status);
+        S.share.on = false; S.share.lastSent = 0; S.share.id = newId(); save();
+        ui.confirmCloudDel = false; toast('הנתונים נמחקו מהשרת.');
+      })
+      .catch(function () { ui.confirmCloudDel = false; toast('המחיקה לא הצליחה. נסה שוב.'); });
+  }
   var STYLES = ['ring', 'fill', 'dots', 'arc'];
   var TIPS = ['להסתכל על הדחף בלי לעשות איתו כלום.', 'לשתות מים לאט.', 'לקום ולשנות מקום.', 'שלוש נשימות עמוקות.', 'לנער את הידיים, לפתוח את הכתפיים.', 'לשים לב איפה בגוף הדחף יושב.'];
   var storageOk = true;
   var S;
-  var ui = { screen: 'home', ctx: null, toast: '', confirmDel: false, confirmRestore: false };
+  var ui = { screen: 'home', ctx: null, toast: '', confirmDel: false, confirmRestore: false, confirmCloudDel: false };
   var tickId = null, wake = null;
 
   function load() {
@@ -293,7 +355,7 @@ function fmtClock(sec) {
 
   /* ---------- records ---------- */
   function record(kind, extra) {
-    var e = { t: Date.now(), kind: kind };
+    var e = { t: Date.now(), kind: kind, stage: S.stage };
     var x = extra || {};
     if (x.trigger) e.trigger = x.trigger;
     if (x.note) e.note = x.note;
@@ -309,6 +371,7 @@ function fmtClock(sec) {
     record(c.outcome, { trigger: trigger, note: note, expect: c.expect, actual: c.actual, timerSec: c.timerSec });
     ui.ctx = null; ui.screen = 'home';
     toast('נרשם.');
+    flush();
   }
 
   /* ---------- screens ---------- */
@@ -323,11 +386,18 @@ function fmtClock(sec) {
       '<input class="slider" id="' + id + '" type="range" min="0" max="10" step="1" value="' + val + '" aria-label="דירוג 0 עד 10">' +
       '<div class="ends"><span>אין הקלה</span><span>הקלה מלאה</span></div></div>';
   }
+  function consentCard() {
+    return '<div class="card"><h2>לעזור לשפר את האפליקציה?</h2>' +
+      '<p>אפשר לשתף נתוני שימוש בעילום שם. נשלחים: סוג האירוע (סיגריה או דחף שחלף), השעה, הטריגר שבחרת (בלי טקסט שהקלדת) והשלב. לא נשלחים שם, טלפון, מיקום או רישומים אחרים.</p>' +
+      '<p class="quiet">אפשר להפסיק ולמחוק את מה שנשלח בכל רגע, בהגדרות. <a href="privacy.html" target="_blank" rel="noopener" style="color:var(--accent)">מדיניות פרטיות</a></p>' +
+      '<div class="row"><button class="btn" data-act="share-yes">כן, אשתף</button><button class="btn" data-act="share-no">לא תודה</button></div></div>';
+  }
   function screenHome() {
     var n = passedThisWeek(S.events, Date.now());
     var first = S.events.length === 0;
     var h = '<main>';
     if (S.mapNotice) h += '<div class="card"><h2>שבוע המיפוי הושלם</h2><p>מעכשיו כל דחף מתחיל טיימר של דקה. אפשר לשנות את השלב בהגדרות.</p><button class="btn small" data-act="notice-ok">הבנתי</button></div>';
+    if (cloudOn() && !S.share.asked && S.events.length >= 1) h += consentCard();
     if (!storageOk) h += '<div class="banner">הדפדפן הזה לא שומר נתונים. הרישומים יאבדו כשתסגור את הדף.</div>';
     if (S.stage === 0) {
       h += '<button class="btn primary" data-act="smoked">עישנתי</button>';
@@ -427,9 +497,14 @@ function fmtClock(sec) {
     h += '<div class="card"><label class="switch"><span>פתיחה מהירה: האפליקציה נפתחת ישר לטיימר</span><input type="checkbox" id="quick"' + (S.quick ? ' checked' : '') + '></label>' +
       '<p class="quiet">לשימוש עם קיצור במסך הבית. אפשר תמיד לבטל את הטיימר.</p></div>';
     h += '<div class="card"><p><strong>קיצור במסך הבית</strong></p><p class="quiet">בכרום: תפריט (שלוש נקודות) ← "התקנת אפליקציה". האפליקציה תופיע עם אייקון, ותיפתח במסך מלא בלי דפדפן. לחיצה ארוכה על האייקון נותנת קיצור "עולה לי רצון" ישר לטיימר.</p></div>';
+    if (cloudOn()) {
+      h += '<div class="card"><label class="switch"><span><strong>שיתוף נתונים בעילום שם</strong><br><span class="quiet">סוג האירוע, שעה, טריגר ושלב. בלי שם, טלפון, מיקום או טקסט שהקלדת.</span></span><input type="checkbox" id="share-toggle"' + (S.share.on ? ' checked' : '') + '></label>' +
+        '<p class="quiet">ביטול השיתוף עוצר שליחה חדשה. מה שכבר נשלח נמחק בלחיצה על הכפתור למטה. <a href="privacy.html" target="_blank" rel="noopener" style="color:var(--accent)">מדיניות פרטיות</a></p>' +
+        '<button class="btn small" data-act="cloud-delete">' + (ui.confirmCloudDel ? 'לחץ שוב לאישור מחיקה מהשרת' : 'מחק את מה ששיתפתי מהשרת') + '</button></div>';
+    }
     h += '<div class="card"><p><strong>גיבוי</strong></p><p class="quiet">הנתונים נשמרים בדפדפן בטלפון הזה בלבד. העתק את הטקסט ושמור אותו אצלך.</p><textarea id="bk" readonly>' + esc(backup) + '</textarea><div class="row"><button class="btn small" data-act="copy-bk">העתק</button></div>' +
       '<p class="quiet">שחזור: הדבק גיבוי כאן.</p><textarea id="rs" placeholder="הדבק כאן"></textarea><button class="btn small" data-act="restore">' + (ui.confirmRestore ? 'לחץ שוב לאישור, זה מחליף את הנתונים הקיימים' : 'שחזר') + '</button></div>';
-    h += '<div class="card"><button class="btn ghost" data-act="wipe">' + (ui.confirmDel ? 'לחץ שוב לאישור מחיקה סופית' : 'מחיקת כל הנתונים') + '</button></div></main>';
+    h += '<div class="card"><button class="btn ghost" data-act="wipe">' + (ui.confirmDel ? 'לחץ שוב לאישור מחיקה סופית' : 'מחיקת כל הנתונים') + '</button></div><p class="quiet">רגע הוא כלי עזר בלבד: טיימר ומעקב. הוא אינו ייעוץ רפואי ואינו תחליף לטיפול.</p></main>';
     return h;
   }
 
@@ -452,6 +527,11 @@ function fmtClock(sec) {
     $('#app').innerHTML = header() + body + (flow ? '' : tabs()) + (ui.toast ? '<div class="toast" role="status">' + esc(ui.toast) + '</div>' : '');
     var sl = $('#sl');
     if (sl) sl.addEventListener('input', function () { $('#sval').textContent = sl.value; });
+    var st = $('#share-toggle');
+    if (st) st.addEventListener('change', function () {
+      if (st.checked) { if (!S.share.id) S.share.id = newId(); S.share.on = true; S.share.asked = true; save(); flush(); toast('תודה. השיתוף פעיל.'); }
+      else { S.share.on = false; S.share.asked = true; save(); toast('השיתוף הופסק.'); }
+    });
     var ni = $('#note');
     if (ni) ni.addEventListener('keydown', function (e) { if (e.key === 'Enter') finish('אחר', ni.value); });
     var q = $('#quick');
@@ -466,6 +546,7 @@ function fmtClock(sec) {
     var a = b.getAttribute('data-act');
     if (a !== 'wipe') ui.confirmDel = false;
     if (a !== 'restore') ui.confirmRestore = false;
+    if (a !== 'cloud-delete') ui.confirmCloudDel = false;
     var c = ui.ctx || {};
     switch (a) {
       case 'tab-home': ui.screen = 'home'; render(); break;
@@ -488,6 +569,12 @@ function fmtClock(sec) {
       case 'other-ok': finish('אחר', ($('#note') || {}).value); break;
       case 'other-skip': finish('אחר'); break;
       case 'trig-skip': finish(undefined); break;
+      case 'share-yes': if (!S.share.id) S.share.id = newId(); S.share.on = true; S.share.asked = true; save(); render(); toast('תודה. השיתוף פעיל.'); flush(); break;
+      case 'share-no': S.share.on = false; S.share.asked = true; save(); render(); break;
+      case 'cloud-delete':
+        if (!ui.confirmCloudDel) { ui.confirmCloudDel = true; render(); break; }
+        deleteCloud();
+        break;
       case 'notice-ok': S.mapNotice = false; save(); render(); break;
       case 'map-restart': S.stage = 0; S.mapStart = dayIdx(Date.now()); S.mapNotice = false; save(); toast('שבוע המיפוי התחיל מהיום.'); break;
       case 'stage-minus': S.stage = Math.max(0, S.stage - 1); if (S.stage === 0) S.mapStart = dayIdx(Date.now()); save(); render(); break;
@@ -500,18 +587,20 @@ function fmtClock(sec) {
         if (!ui.confirmRestore) { ui.confirmRestore = true; render(); break; }
         try {
           var o = JSON.parse($('#rs').value);
-          var n = normalize({ stage: o.stage, events: o.events, quick: S.quick });
+          var n = normalize({ stage: o.stage, events: o.events, quick: S.quick, share: S.share, mapStart: S.mapStart });
           if (!n.events.length) throw new Error('empty');
           S = n; save(); ui.confirmRestore = false; toast('שוחזר.');
         } catch (e) { ui.confirmRestore = false; toast('הטקסט לא נראה כמו גיבוי.'); }
         break;
       case 'wipe':
         if (!ui.confirmDel) { ui.confirmDel = true; render(); break; }
-        S = normalize({}); save(); ui.confirmDel = false; toast('הנתונים נמחקו.');
+        S = normalize({ share: S.share }); save(); ui.confirmDel = false; toast('הנתונים נמחקו.');
         break;
     }
   });
+  window.addEventListener('online', flush);
   document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') flush();
     if (document.visibilityState === 'visible' && !S.active) { var was = S.stage; checkMapping(); if (was !== S.stage) render(); }
     if (document.visibilityState === 'visible' && ui.screen === 'timer' && S.active && remaining() <= 0) { ui.screen = 'ask'; render(); }
   });
@@ -522,6 +611,7 @@ function fmtClock(sec) {
   /* ---------- boot ---------- */
   S = load();
   checkMapping();
+  flush();
   if (S.active) {
     ui.screen = remaining() <= 0 ? 'ask' : 'timer';
     ui.ctx = null;
