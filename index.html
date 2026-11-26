@@ -405,7 +405,7 @@ function fmtClock(sec) {
   }
   function consentCard() {
     return '<div class="card"><h2>לעזור לשפר את האפליקציה?</h2>' +
-      '<p>אפשר לשתף נתוני שימוש בעילום שם. נשלחים: סוג האירוע (סיגריה או דחף שחלף), השעה, הטריגר שבחרת (בלי טקסט שהקלדת) והשלב. לא נשלחים שם, טלפון, מיקום או רישומים אחרים.</p>' +
+      '<p>אפשר לשתף נתוני שימוש בלי פרטים מזהים. נשלחים: סוג האירוע (סיגריה או דחף שחלף), השעה, הטריגר שבחרת (בלי טקסט שהקלדת) והשלב. לא נשלחים שם, טלפון, מיקום או רישומים אחרים.</p>' +
       '<p class="quiet">אפשר להפסיק ולמחוק את מה שנשלח בכל רגע, בהגדרות. <a href="privacy.html" target="_blank" rel="noopener" style="color:var(--accent)">מדיניות פרטיות</a></p>' +
       '<div class="row"><button class="btn" data-act="share-yes">כן, אשתף</button><button class="btn" data-act="share-no">לא תודה</button></div></div>';
   }
@@ -515,7 +515,7 @@ function fmtClock(sec) {
       '<p class="quiet">לשימוש עם קיצור במסך הבית. אפשר תמיד לבטל את הטיימר.</p></div>';
     h += '<div class="card"><p><strong>קיצור במסך הבית</strong></p><p class="quiet">בכרום: תפריט (שלוש נקודות) ← "התקנת אפליקציה". האפליקציה תופיע עם אייקון, ותיפתח במסך מלא בלי דפדפן. לחיצה ארוכה על האייקון נותנת קיצור "עולה לי רצון" ישר לטיימר.</p></div>';
     if (cloudOn()) {
-      h += '<div class="card"><label class="switch"><span><strong>שיתוף נתונים בעילום שם</strong><br><span class="quiet">סוג האירוע, שעה, טריגר ושלב. בלי שם, טלפון, מיקום או טקסט שהקלדת.</span></span><input type="checkbox" id="share-toggle"' + (S.share.on ? ' checked' : '') + '></label>' +
+      h += '<div class="card"><label class="switch"><span><strong>שיתוף נתונים בלי פרטים מזהים</strong><br><span class="quiet">סוג האירוע, שעה, טריגר ושלב. בלי שם, טלפון, מיקום או טקסט שהקלדת.</span></span><input type="checkbox" id="share-toggle"' + (S.share.on ? ' checked' : '') + '></label>' +
         (S.share.on && cloudStatus ? '<p class="quiet">' + esc(cloudStatus) + '</p>' : '') + (S.share.on && S.share.id ? '<p class="quiet" dir="ltr" style="text-align:left;word-break:break-all">ID: ' + esc(S.share.id) + '</p>' : '') + '<p class="quiet">ביטול השיתוף עוצר שליחה חדשה. מה שכבר נשלח נמחק בלחיצה על הכפתור למטה. <a href="privacy.html" target="_blank" rel="noopener" style="color:var(--accent)">מדיניות פרטיות</a></p>' +
         '<button class="btn small" data-act="cloud-delete">' + (ui.confirmCloudDel ? 'לחץ שוב לאישור מחיקה מהשרת' : 'מחק את מה ששיתפתי מהשרת') + '</button></div>';
     }
