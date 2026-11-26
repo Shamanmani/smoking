@@ -427,11 +427,6 @@ function fmtClock(sec) {
     function t(id, label) { return '<button class="tab" data-act="tab-' + id + '"' + (cur === id ? ' aria-current="page"' : '') + '>' + label + '</button>'; }
     return '<nav class="tabs" aria-label="ניווט"><div class="inner">' + t('home', 'בית') + t('stats', 'מגמה') + t('settings', 'הגדרות') + '</div></nav>';
   }
-  function sliderBlock(id, val) {
-    return '<div class="card"><div class="big-num" id="sval" style="text-align:center">' + val + '</div>' +
-      '<input class="slider" id="' + id + '" type="range" min="0" max="10" step="1" value="' + val + '" aria-label="דירוג 0 עד 10">' +
-      '<div class="ends"><span>אין הקלה</span><span>הקלה מלאה</span></div></div>';
-  }
   function consentCard() {
     return '<div class="card"><h2>לעזור לשפר את האפליקציה?</h2>' +
       '<p>אפשר לשתף נתוני שימוש בלי פרטים מזהים. נשלחים: סוג האירוע (סיגריה או דחף שחלף), השעה, הטריגר שבחרת (בלי טקסט שהקלדת) והשלב. לא נשלחים שם, טלפון, מיקום או רישומים אחרים.</p>' +
@@ -460,23 +455,15 @@ function fmtClock(sec) {
   }
   function screenTimer() {
     var a = S.active;
-    return '<main class="timer"><p class="quiet">הדחף יחלוף גם בלי סיגריה.</p><div class="vis" id="vis">' + visual(a.style, 1 - remaining() / a.dur) + '</div>' +
+    return '<main class="timer"><div class="vis" id="vis">' + visual(a.style, 1 - remaining() / a.dur) + '</div>' +
       '<div class="clock" id="clock">' + fmtClock(remaining()) + '</div><p>' + esc(TIPS[a.tip % TIPS.length]) + '</p>' +
       '<button class="btn ghost small" data-act="cancel">ביטול</button></main>';
   }
   function screenAsk() {
     return '<main><h2>עדיין רוצה?</h2><div class="row"><button class="btn big" data-act="want-yes">כן</button><button class="btn big" data-act="want-no">לא עכשיו</button></div></main>';
   }
-  function screenExpect() {
-    return '<main><h2>לפני שמעשנים: כמה הקלה אתה מצפה לקבל?</h2>' + sliderBlock('sl', 5) +
-      '<button class="btn" data-act="expect-ok">המשך</button><button class="btn ghost" data-act="expect-skip">דלג</button></main>';
-  }
   function screenSmoking() {
     return '<main><h2>עשן בתשומת לב</h2><p>בלי מסך ובלי לעשות דבר נוסף. מה אתה מרגיש בגוף, בטעם ובריח?</p><button class="btn" data-act="done-smoking">סיימתי</button></main>';
-  }
-  function screenActual() {
-    return '<main><h2>כמה הקלה קיבלת בפועל?</h2>' + sliderBlock('sl', 5) +
-      '<button class="btn" data-act="actual-ok">המשך</button><button class="btn ghost" data-act="actual-skip">דלג</button></main>';
   }
   function screenOther() {
     return '<main><h2>מה היה הטריגר?</h2><input id="note" type="text" maxlength="80" autocomplete="off" placeholder="כתוב כאן" style="width:100%;min-height:56px;font:inherit;font-size:18px;padding:10px 14px;border-radius:14px;border:1px solid var(--line);background:var(--surface);color:var(--ink)">' +
@@ -528,12 +515,6 @@ function fmtClock(sec) {
     var notes = [];
     for (var i = S.events.length - 1; i >= 0 && notes.length < 5; i--) { var nt = S.events[i].note; if (nt && notes.indexOf(nt) < 0) notes.push(nt); }
     if (notes.length) h += '<div class="card"><p class="quiet">מה שרשמת תחת "אחר"</p><p>' + notes.map(esc).join(' · ') + '</p></div>';
-    var ev = expectVsActual(S.events, 30);
-    if (ev) {
-      h += '<div class="card"><p class="quiet">מה שהסיגריה הבטיחה מול מה שקיבלת (ממוצע, ' + ev.n + ' סיגריות)</p><div class="bars">' +
-        '<div class="bar-row"><span>ציפיתי</span><div class="bar-track"><div class="bar-fill alt" style="width:' + (ev.expect * 10) + '%"></div></div><span>' + ev.expect.toFixed(1) + '</span></div>' +
-        '<div class="bar-row"><span>קיבלתי</span><div class="bar-track"><div class="bar-fill" style="width:' + (ev.actual * 10) + '%"></div></div><span>' + ev.actual.toFixed(1) + '</span></div></div></div>';
-    }
     return h + '</main>';
   }
   function screenSettings() {
@@ -562,19 +543,15 @@ function fmtClock(sec) {
     switch (ui.screen) {
       case 'timer': body = screenTimer(); break;
       case 'ask': body = screenAsk(); break;
-      case 'expect': body = screenExpect(); break;
       case 'smoking': body = screenSmoking(); break;
-      case 'actual': body = screenActual(); break;
       case 'trigger': body = screenTrigger(); break;
       case 'other': body = screenOther(); break;
       case 'stats': body = screenStats(); break;
       case 'settings': body = screenSettings(); break;
       default: body = needConsent ? '<main>' + consentCard() + '</main>' : screenHome();
     }
-    var flow = needConsent || ['timer', 'ask', 'expect', 'smoking', 'actual', 'trigger', 'other'].indexOf(ui.screen) >= 0;
+    var flow = needConsent || ['timer', 'ask', 'smoking', 'trigger', 'other'].indexOf(ui.screen) >= 0;
     $('#app').innerHTML = header() + body + (flow ? '' : tabs()) + (ui.toast ? '<div class="toast" role="status">' + esc(ui.toast) + '</div>' : '');
-    var sl = $('#sl');
-    if (sl) sl.addEventListener('input', function () { $('#sval').textContent = sl.value; });
     var st = $('#share-toggle');
     if (st) st.addEventListener('change', function () {
       if (st.checked) { if (!S.share.id) S.share.id = newId(); S.share.on = true; S.share.asked = true; save(); flush(); toast('תודה. השיתוף פעיל.'); }
@@ -585,7 +562,6 @@ function fmtClock(sec) {
   }
 
   /* ---------- actions ---------- */
-  function sliderVal() { var sl = $('#sl'); return sl ? Number(sl.value) : undefined; }
   document.addEventListener('click', function (ev) {
     var b = ev.target.closest('[data-act]');
     if (!b) return;
@@ -599,15 +575,11 @@ function fmtClock(sec) {
       case 'tab-stats': ui.screen = 'stats'; render(); break;
       case 'tab-settings': ui.screen = 'settings'; render(); break;
       case 'urge': startTimer(); break;
-      case 'smoked': ui.ctx = { outcome: 'cig', direct: true }; ui.screen = S.stage === 0 ? 'trigger' : 'actual'; render(); break;
+      case 'smoked': ui.ctx = { outcome: 'cig', direct: true }; ui.screen = 'trigger'; render(); break;
       case 'cancel': stopTick(); releaseWake(); S.active = null; save(); ui.screen = 'home'; render(); break;
       case 'want-no': ui.ctx = { outcome: 'passed', timerSec: S.active ? S.active.dur : undefined }; ui.screen = 'trigger'; render(); break;
-      case 'want-yes': ui.ctx = { outcome: 'cig', timerSec: S.active ? S.active.dur : undefined }; ui.screen = 'expect'; render(); break;
-      case 'expect-ok': c.expect = sliderVal(); ui.ctx = c; ui.screen = 'smoking'; render(); break;
-      case 'expect-skip': ui.screen = 'smoking'; render(); break;
-      case 'done-smoking': ui.screen = 'actual'; render(); break;
-      case 'actual-ok': c.actual = sliderVal(); ui.ctx = c; ui.screen = 'trigger'; render(); break;
-      case 'actual-skip': ui.screen = 'trigger'; render(); break;
+      case 'want-yes': ui.ctx = { outcome: 'cig', timerSec: S.active ? S.active.dur : undefined }; ui.screen = 'smoking'; render(); break;
+      case 'done-smoking': ui.screen = 'trigger'; render(); break;
       case 'trig':
         if (b.getAttribute('data-v') === 'אחר') { ui.screen = 'other'; render(); var ni = $('#note'); if (ni) ni.focus(); }
         else finish(b.getAttribute('data-v'));
@@ -672,10 +644,11 @@ function fmtClock(sec) {
   S = load();
   refreshStage();
   flush();
+  if (S.active && remaining() <= 0) { S.active = null; save(); }   /* a timer that ran out while the app was closed: just start a fresh one */
   if (S.active) {
-    ui.screen = remaining() <= 0 ? 'ask' : 'timer';
+    ui.screen = 'timer';
     ui.ctx = null;
-    if (ui.screen === 'timer') startTick();
+    startTick();
   } else if (maybeAutoStart()) {
     return;
   }
