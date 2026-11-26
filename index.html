@@ -251,19 +251,33 @@ function fmtClock(sec) {
     for (var k in (extra || {})) o[k] = extra[k];
     return o;
   }
+  function errText(r) {
+    return r.text().then(function (t) {
+      var m = t; try { var j = JSON.parse(t); m = j.message || j.hint || t; } catch (e) {}
+      return new Error(r.status + (m ? ' ' + String(m).slice(0, 100) : ''));
+    }, function () { return new Error(String(r.status)); });
+  }
+  function postRows(rows) {
+    return fetch(CLOUD.url + '/rest/v1/events', { method: 'POST', headers: cloudHeaders({ Prefer: 'return=minimal' }), body: JSON.stringify(rows) });
+  }
   function flush() {
     if (!cloudOn() || !S.share.on || !S.share.id || sending) return;
     if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
     var evs = S.events.filter(function (e) { return e.t > S.share.lastSent; }).sort(function (a, b) { return a.t - b.t; });
     if (!evs.length) return;
     var batch = evs.slice(0, 200), uid = S.share.id;
+    var rows = batch.map(function (e) { return eventRow(uid, e); });
     sending = true;
-    fetch(CLOUD.url + '/rest/v1/events?on_conflict=uid,ev_t', {
-      method: 'POST',
-      headers: cloudHeaders({ Prefer: 'resolution=ignore-duplicates,return=minimal' }),
-      body: JSON.stringify(batch.map(function (e) { return eventRow(uid, e); }))
-    }).then(function (r) {
-      if (!r.ok) throw new Error('http ' + r.status);
+    postRows(rows).then(function (r) {
+      if (r.ok) return;
+      if (r.status === 409) {
+        /* a duplicate in the batch (already stored): resend one by one, 409 counts as stored */
+        return Promise.all(rows.map(function (row) {
+          return postRows([row]).then(function (rr) { if (!rr.ok && rr.status !== 409) return errText(rr).then(function (er) { throw er; }); });
+        }));
+      }
+      return errText(r).then(function (er) { throw er; });
+    }).then(function () {
       if (S.share.id === uid) { S.share.lastSent = batch[batch.length - 1].t; save(); }
       cloudStatus = 'השליחה האחרונה הצליחה.';
       sending = false;
