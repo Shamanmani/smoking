@@ -175,6 +175,7 @@ function expectVsActual(events, lastN) {
   return { n: pairs.length, expect: se / pairs.length, actual: sa / pairs.length };
 }
 var MAP_DAYS = 7;
+var MAX_STAGE = 15;
 function mapDay(mapStart, nowTs) { return mapStart == null ? 1 : dayIdx(nowTs) - mapStart + 1; }
 function normShare(s) {
   s = (s && typeof s === 'object') ? s : {};
@@ -194,6 +195,14 @@ function eventRow(uid, e) {
     timer_sec: (typeof e.timerSec === 'number') ? e.timerSec : null
   };
 }
+/* Timer length in minutes for a given calendar day: 0 = mapping week (no timer); then +1 minute a day, 1 → 15. */
+function computeStage(mapStart, today) {
+  if (mapStart == null) return 0;
+  var d = today - (mapStart + MAP_DAYS);
+  if (d < 0) return 0;
+  return Math.min(MAX_STAGE, d + 1);
+}
+function minutesLabel(n) { return n === 1 ? 'דקה' : (n + ' דקות'); }
 function clampInt(v, lo, hi, def) { v = Number(v); if (!isFinite(v)) return def; v = Math.round(v); return Math.max(lo, Math.min(hi, v)); }
 function validEvent(e) {
   if (!e || typeof e !== 'object') return false;
@@ -220,6 +229,7 @@ function normalize(o) {
     quick: !!o.quick,
     mapStart: (typeof o.mapStart === 'number' && isFinite(o.mapStart)) ? Math.round(o.mapStart) : null,
     mapNotice: !!o.mapNotice,
+    devShift: clampInt(o.devShift, -400, 400, 0),
     share: normShare(o.share),
     lastStyle: typeof o.lastStyle === 'string' ? o.lastStyle : '',
     events: Array.isArray(o.events) ? o.events.filter(validEvent).map(cleanEvent) : [],
@@ -236,6 +246,7 @@ function fmtClock(sec) {
 <script id="appjs">
 (function () {
   var KEY = 'raga.v1';
+  var AUTO_START_AFTER_MS = 2 * 60 * 1000;
   /* Cloud sharing stays hidden until both values are filled in (Supabase project URL + publishable key). */
   var CLOUD = { url: 'https://ubdiioxcmkfhocycwnlf.supabase.co', key: 'sb_publishable_QNsxSzHxrfWfLn1kDIvfgw_Y5DvFIDC' };
   function cloudOn() { return !!(CLOUD.url && CLOUD.key); }
@@ -300,7 +311,7 @@ function fmtClock(sec) {
   var storageOk = true;
   var S;
   var ui = { screen: 'home', ctx: null, toast: '', confirmDel: false, confirmRestore: false, confirmCloudDel: false, devTaps: 0 };
-  var tickId = null, wake = null;
+  var tickId = null, wake = null, hiddenAt = 0;
 
   function load() {
     try { var r = localStorage.getItem(KEY); if (r) return normalize(JSON.parse(r)); } catch (e) { storageOk = false; }
@@ -309,18 +320,36 @@ function fmtClock(sec) {
   function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { storageOk = false; } }
   function $(sel) { return document.querySelector(sel); }
   function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function nowSim() { return Date.now() + (S.devShift || 0) * DAY; }
+  function todayIdx() { return dayIdx(nowSim()); }
   function ensureMapStart() {
-    if (S.stage === 0 && S.mapStart == null) {
+    if (S.mapStart == null) {
       var f = firstDay(S.events);
-      S.mapStart = f === null ? dayIdx(Date.now()) : f;
+      S.mapStart = f === null ? todayIdx() : f;
       save();
     }
   }
-  function checkMapping() {
+  /* The timer length follows the calendar: see computeStage(). Returns true if the stage changed. */
+  function refreshStage() {
     ensureMapStart();
-    if (S.stage === 0 && mapDay(S.mapStart, Date.now()) > MAP_DAYS) { S.stage = 1; S.mapNotice = true; save(); }
+    var st = computeStage(S.mapStart, todayIdx());
+    if (st === S.stage) return false;
+    var was = S.stage;
+    S.stage = st;
+    if (was === 0 && st >= 1) S.mapNotice = true;
+    if (st === 0) S.mapNotice = false;
+    save();
+    return true;
   }
-  function stageLabel() { return S.stage === 0 ? 'מיפוי' : (S.stage + ' דקות'); }
+  function stageLabel() { return S.stage === 0 ? 'מיפוי' : ('טיימר: ' + minutesLabel(S.stage)); }
+  /* Opening the app on a trigger starts the timer by itself (not during mapping, not before the first-run consent, not while the intro note is pending). */
+  function maybeAutoStart() {
+    if (S.stage < 1 || S.active || S.mapNotice) return false;
+    if (cloudOn() && !S.share.asked) return false;
+    if (['home', 'stats', 'settings'].indexOf(ui.screen) < 0) return false;
+    startTimer();
+    return true;
+  }
   function toast(msg) {
     ui.toast = msg; render();
     setTimeout(function () { if (ui.toast === msg) { ui.toast = ''; var t = $('.toast'); if (t) t.remove(); } }, 2200);
@@ -392,7 +421,7 @@ function fmtClock(sec) {
   }
 
   /* ---------- screens ---------- */
-  function header() { return '<header class="top"><h1>רגע</h1><span class="chip">שלב: ' + esc(stageLabel()) + '</span></header>'; }
+  function header() { return '<header class="top"><h1>רגע</h1><span class="chip">' + esc(stageLabel()) + '</span></header>'; }
   function tabs() {
     var cur = ui.screen === 'stats' ? 'stats' : ui.screen === 'settings' ? 'settings' : 'home';
     function t(id, label) { return '<button class="tab" data-act="tab-' + id + '"' + (cur === id ? ' aria-current="page"' : '') + '>' + label + '</button>'; }
@@ -413,19 +442,19 @@ function fmtClock(sec) {
     var n = passedThisWeek(S.events, Date.now());
     var first = S.events.length === 0;
     var h = '<main>';
-    if (S.mapNotice) h += '<div class="card"><h2>שבוע המיפוי הושלם</h2><p>מעכשיו כל דחף מתחיל טיימר של דקה. אפשר לשנות את השלב בהגדרות.</p><button class="btn small" data-act="notice-ok">הבנתי</button></div>';
+    if (S.mapNotice) h += '<div class="card"><h2>שבוע המיפוי הושלם</h2><p>מעכשיו, בכל פעם שאתה פותח את האפליקציה, מתחיל טיימר. הוא מתחיל בדקה ומתארך בדקה בכל יום, עד 15 דקות.</p><button class="btn small" data-act="notice-ok">הבנתי</button></div>';
     if (!storageOk) h += '<div class="banner">הדפדפן הזה לא שומר נתונים. הרישומים יאבדו כשתסגור את הדף.</div>';
     if (S.stage === 0) {
       h += '<button class="btn primary" data-act="smoked">עישנתי</button>';
-      h += '<p class="quiet">שלב המיפוי: יום ' + Math.max(1, mapDay(S.mapStart, Date.now())) + ' מתוך ' + MAP_DAYS + '. רושמים כל סיגריה ומה שהדליק את החשק לעשן. אחרי שבעה ימים עוברים לשלב הראשון.</p>';
+      h += '<p class="quiet">שלב המיפוי: יום ' + Math.max(1, mapDay(S.mapStart, nowSim())) + ' מתוך ' + MAP_DAYS + '. רושמים כל סיגריה ומה שהדליק את החשק לעשן. אחרי שבעה ימים מתחיל הטיימר.</p>';
     } else {
       h += '<button class="btn primary" data-act="urge">עולה לי רצון</button>';
       h += '<button class="btn" data-act="smoked">עישנתי</button>';
       if (n > 0) h += '<p class="quiet">השבוע חלפו ' + n + ' דחפים בלי סיגריה.</p>';
     }
     if (first) {
-      if (S.stage === 0) h += '<div class="card"><h2>שלב המיפוי: להבין מה מדליק את החשק</h2><p>בכל פעם שאתה מעשן סיגריה, לחץ על "עישנתי" ובחר מה לדעתך גרם לך לרצות אותה, כלומר מה הדליק את החשק לעשן: קפה, אחרי אוכל, מתח, שעמום או משהו אחר.</p><p class="quiet">בשבוע הזה אין צורך לשנות שום דבר בהתנהגות. אחרי שבעה ימים נעבור לשלב הבא ונתחיל להשתמש בטיימר.</p></div>';
-      else h += '<div class="card"><h2>איך זה עובד</h2><p>לחיצה על "עולה לי רצון" מפעילה טיימר. בסופו בוחרים אם עדיין רוצים. כל דקה שחולפת היא הצלחה, ואין מעידות ואין איפוס.</p></div>';
+      if (S.stage === 0) h += '<div class="card"><h2>שלב המיפוי: להבין מה מדליק את החשק</h2><p>בכל פעם שאתה מעשן סיגריה, לחץ על "עישנתי" ובחר מה לדעתך גרם לך לרצות אותה, כלומר מה הדליק את החשק לעשן: קפה, אחרי אוכל, מתח, שעמום או משהו אחר.</p><p class="quiet">בשבוע הזה אין צורך לשנות שום דבר בהתנהגות. אחרי שבעה ימים האפליקציה תעבור לבד לשלב הטיימר.</p></div>';
+      else h += '<div class="card"><h2>איך זה עובד</h2><p>כשעולה חשק, פותחים את האפליקציה והטיימר מתחיל מעצמו. בסופו בוחרים אם עדיין רוצים. כל דקה שחולפת היא הצלחה, ואין מעידות ואין איפוס.</p></div>';
     }
     return h + '</main>';
   }
@@ -509,11 +538,11 @@ function fmtClock(sec) {
   }
   function screenSettings() {
     var backup = JSON.stringify({ stage: S.stage, events: S.events });
-    var h = '<main><h2 data-act="dev-tap">הגדרות</h2><div class="card"><p><strong>שלב</strong></p><div class="stepper"><button class="btn" data-act="stage-minus" aria-label="שלב קודם">−</button><span class="val">' + esc(stageLabel()) + '</span><button class="btn" data-act="stage-plus" aria-label="שלב הבא">+</button></div>' +
-      '<p class="quiet">מיפוי: רישום בלי טיימר, שבעה ימים בדיוק, ואז עוברים אוטומטית לשלב 1. אחר כך כל שלב הוא משך הטיימר בדקות, עד 15. הטיימר משתנה סביב הערך הזה, ואתה קובע מתי לעלות.</p>' + (S.stage === 0 ? '<button class="btn small" data-act="map-restart">התחל את שבוע המיפוי מחדש מהיום</button>' : '') + '</div>';
-    h += '<div class="card"><label class="switch"><span>פתיחה מהירה: האפליקציה נפתחת ישר לטיימר</span><input type="checkbox" id="quick"' + (S.quick ? ' checked' : '') + '></label>' +
-      '<p class="quiet">לשימוש עם קיצור במסך הבית. אפשר תמיד לבטל את הטיימר.</p></div>';
-    h += '<div class="card"><p><strong>קיצור במסך הבית</strong></p><p class="quiet">בכרום: תפריט (שלוש נקודות) ← "התקנת אפליקציה". האפליקציה תופיע עם אייקון, ותיפתח במסך מלא בלי דפדפן. לחיצה ארוכה על האייקון נותנת קיצור "עולה לי רצון" ישר לטיימר.</p></div>';
+    var h = '<main><h2 data-act="dev-tap">הגדרות</h2><div class="card"><p><strong>הטיימר של היום</strong></p><div class="big-num" style="font-size:36px">' + (S.stage === 0 ? 'אין, שבוע מיפוי' : minutesLabel(S.stage)) + '</div>' +
+      '<p class="quiet">' + (S.stage === 0
+        ? 'שבוע המיפוי: יום ' + Math.max(1, mapDay(S.mapStart, nowSim())) + ' מתוך ' + MAP_DAYS + '. אחריו הטיימר מתחיל בדקה אחת ומתארך בדקה בכל יום, עד 15 דקות.'
+        : 'הטיימר מתארך בדקה בכל יום, עד 15 דקות, והוא משתנה מעט מפעם לפעם סביב הערך הזה.') + '</p></div>';
+    h += '<div class="card"><p><strong>קיצור במסך הבית</strong></p><p class="quiet">בכרום: תפריט (שלוש נקודות) ← "התקנת אפליקציה". האפליקציה תופיע עם אייקון ותיפתח במסך מלא. מהשלב הראשון, בכל פעם שתפתח אותה יתחיל טיימר.</p></div>';
     if (cloudOn()) {
       h += '<div class="card"><label class="switch"><span><strong>שיתוף נתונים בלי פרטים מזהים</strong><br><span class="quiet">סוג האירוע, שעה, טריגר ושלב. בלי שם, טלפון, מיקום או טקסט שהקלדת.</span></span><input type="checkbox" id="share-toggle"' + (S.share.on ? ' checked' : '') + '></label>' +
         (S.share.on && cloudStatus ? '<p class="quiet">' + esc(cloudStatus) + '</p>' : '') + (S.share.on && S.share.id ? '<p class="quiet" dir="ltr" style="text-align:left;word-break:break-all">ID: ' + esc(S.share.id) + '</p>' : '') + '<p class="quiet">ביטול השיתוף עוצר שליחה חדשה. מה שכבר נשלח נמחק בלחיצה על הכפתור למטה. <a href="privacy.html" target="_blank" rel="noopener" style="color:var(--accent)">מדיניות פרטיות</a></p>' +
@@ -522,12 +551,12 @@ function fmtClock(sec) {
     h += '<div class="card"><p><strong>גיבוי</strong></p><p class="quiet">הנתונים נשמרים בדפדפן בטלפון הזה בלבד. העתק את הטקסט ושמור אותו אצלך.</p><textarea id="bk" readonly>' + esc(backup) + '</textarea><div class="row"><button class="btn small" data-act="copy-bk">העתק</button></div>' +
       '<p class="quiet">שחזור: הדבק גיבוי כאן.</p><textarea id="rs" placeholder="הדבק כאן"></textarea><button class="btn small" data-act="restore">' + (ui.confirmRestore ? 'לחץ שוב לאישור, זה מחליף את הנתונים הקיימים' : 'שחזר') + '</button></div>';
     h += '<div class="card"><button class="btn ghost" data-act="wipe">' + (ui.confirmDel ? 'לחץ שוב לאישור מחיקה סופית' : 'מחיקת כל הנתונים') + '</button></div><p class="quiet">רגע הוא כלי עזר בלבד: טיימר ומעקב. הוא אינו ייעוץ רפואי ואינו תחליף לטיפול.</p>' +
-      (ui.devTaps >= 7 ? '<div class="card"><p><strong>למפתח</strong></p><p class="quiet">מאפס את כל הנתונים וההגדרות בטלפון הזה, כולל בחירת השיתוף, ופותח את האפליקציה כמו בפעם הראשונה. מה ששותף כבר לשרת נשאר שם.</p><button class="btn small" data-act="dev-reset">איפוס מלא לבדיקה</button></div>' : '') + '</main>';
+      (ui.devTaps >= 7 ? '<div class="card"><p><strong>למפתח</strong></p><p class="quiet">תאריך סימולציה: ' + (S.devShift > 0 ? '+' : '') + S.devShift + ' ימים. מזיז את היום לצורך בדיקת עליית הטיימר.</p><div class="row"><button class="btn small" data-act="dev-day" data-v="-1">יום אחורה</button><button class="btn small" data-act="dev-day" data-v="1">יום קדימה</button></div><button class="btn small" data-act="map-restart">התחל מיפוי מחדש מהיום</button><p class="quiet">איפוס מלא מוחק את כל הנתונים וההגדרות בטלפון הזה, כולל בחירת השיתוף, ופותח את האפליקציה כמו בפעם הראשונה. מה ששותף כבר לשרת נשאר שם.</p><button class="btn small" data-act="dev-reset">איפוס מלא לבדיקה</button></div>' : '') + '</main>';
     return h;
   }
 
   function render() {
-    if (!S.active || ui.screen === 'home') checkMapping();
+    if (!S.active || ui.screen === 'home') refreshStage();
     var body;
     var needConsent = cloudOn() && !S.share.asked && ui.screen === 'home';
     switch (ui.screen) {
@@ -553,8 +582,6 @@ function fmtClock(sec) {
     });
     var ni = $('#note');
     if (ni) ni.addEventListener('keydown', function (e) { if (e.key === 'Enter') finish('אחר', ni.value); });
-    var q = $('#quick');
-    if (q) q.addEventListener('change', function () { S.quick = q.checked; save(); });
   }
 
   /* ---------- actions ---------- */
@@ -600,12 +627,11 @@ function fmtClock(sec) {
         try { localStorage.removeItem(KEY); } catch (e) {}
         S = normalize({}); ui.screen = 'home'; ui.ctx = null; ui.toast = ''; ui.devTaps = 0;
         ui.confirmDel = false; ui.confirmRestore = false; ui.confirmCloudDel = false;
-        checkMapping(); save(); render();
+        refreshStage(); save(); render();
         break;
+      case 'dev-day': S.devShift = clampInt(S.devShift + Number(b.getAttribute('data-v')), -400, 400, 0); refreshStage(); save(); render(); break;
       case 'notice-ok': S.mapNotice = false; save(); render(); break;
-      case 'map-restart': S.stage = 0; S.mapStart = dayIdx(Date.now()); S.mapNotice = false; save(); toast('שבוע המיפוי התחיל מהיום.'); break;
-      case 'stage-minus': S.stage = Math.max(0, S.stage - 1); if (S.stage === 0) S.mapStart = dayIdx(Date.now()); save(); render(); break;
-      case 'stage-plus': S.stage = Math.min(15, S.stage + 1); S.mapNotice = false; save(); render(); break;
+      case 'map-restart': S.stage = 0; S.mapStart = todayIdx(); S.mapNotice = false; save(); toast('שבוע המיפוי התחיל מהיום.'); break;
       case 'copy-bk':
         try { navigator.clipboard.writeText($('#bk').value).then(function () { toast('הועתק.'); }, function () { $('#bk').select(); toast('סמן והעתק ידנית.'); }); }
         catch (e) { $('#bk').select(); toast('סמן והעתק ידנית.'); }
@@ -614,7 +640,7 @@ function fmtClock(sec) {
         if (!ui.confirmRestore) { ui.confirmRestore = true; render(); break; }
         try {
           var o = JSON.parse($('#rs').value);
-          var n = normalize({ stage: o.stage, events: o.events, quick: S.quick, share: S.share, mapStart: S.mapStart });
+          var n = normalize({ stage: o.stage, events: o.events, share: S.share, mapStart: S.mapStart, devShift: S.devShift });
           if (!n.events.length) throw new Error('empty');
           S = n; save(); ui.confirmRestore = false; toast('שוחזר.');
         } catch (e) { ui.confirmRestore = false; toast('הטקסט לא נראה כמו גיבוי.'); }
@@ -627,9 +653,16 @@ function fmtClock(sec) {
   });
   window.addEventListener('online', flush);
   document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState === 'visible') flush();
-    if (document.visibilityState === 'visible' && !S.active) { var was = S.stage; checkMapping(); if (was !== S.stage) render(); }
-    if (document.visibilityState === 'visible' && ui.screen === 'timer' && S.active && remaining() <= 0) { ui.screen = 'ask'; render(); }
+    if (document.visibilityState === 'hidden') { hiddenAt = Date.now(); return; }
+    if (document.visibilityState !== 'visible') return;
+    flush();
+    var away = hiddenAt ? Date.now() - hiddenAt : 0;
+    hiddenAt = 0;
+    var changed = !S.active ? refreshStage() : false;
+    if (ui.screen === 'timer' && S.active && remaining() <= 0) { ui.screen = 'ask'; render(); return; }
+    /* coming back to the app after a couple of minutes = a new moment of craving: start the timer */
+    if (away >= AUTO_START_AFTER_MS && maybeAutoStart()) return;
+    if (changed) render();
   });
 
   /* ---------- offline / install ---------- */
@@ -637,14 +670,13 @@ function fmtClock(sec) {
 
   /* ---------- boot ---------- */
   S = load();
-  checkMapping();
+  refreshStage();
   flush();
   if (S.active) {
     ui.screen = remaining() <= 0 ? 'ask' : 'timer';
     ui.ctx = null;
     if (ui.screen === 'timer') startTick();
-  } else if (S.stage >= 1 && (S.quick || location.hash === '#start')) {
-    startTimer();
+  } else if (maybeAutoStart()) {
     return;
   }
   render();
