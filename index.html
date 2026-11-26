@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1F7A6D">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<title>רגע</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700&amp;family=Rubik:wght@500;600&amp;display=swap" rel="stylesheet">
+<style>
+:root {
+  /* layout: one column, thumb-reach buttons, bottom tab bar; calm teal on pale mint */
+  --bg: #EDF3F1;
+  --surface: #FFFFFF;
+  --ink: #12302B;
+  --muted: #587069;
+  --accent: #1F7A6D;
+  --accent-ink: #FFFFFF;
+  --soft: #DCEBE7;
+  --line: #CFDDD9;
+  --indigo: #4B5FA8;
+  --gold: #9A7B2F;
+  --font-display: 'Rubik', 'Heebo', system-ui, sans-serif;
+  --font-body: 'Heebo', system-ui, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0E1A18; --surface: #162624; --ink: #E3F0EC; --muted: #8FAAA3;
+    --accent: #5CC4B2; --accent-ink: #0B1F1B; --soft: #1E3430; --line: #264039;
+    --indigo: #9BAEF0; --gold: #D9BA62;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0E1A18; --surface: #162624; --ink: #E3F0EC; --muted: #8FAAA3;
+  --accent: #5CC4B2; --accent-ink: #0B1F1B; --soft: #1E3430; --line: #264039;
+  --indigo: #9BAEF0; --gold: #D9BA62;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: 17px; line-height: 1.5;
+  -webkit-tap-highlight-color: transparent;
+}
+#app { max-width: 520px; margin: 0 auto; min-height: 100%; display: flex; flex-direction: column; }
+header.top { padding: 18px 20px 6px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+header.top h1 { font-family: var(--font-display); font-weight: 600; font-size: 26px; margin: 0; letter-spacing: 0; }
+.chip { background: var(--soft); color: var(--ink); border-radius: 999px; padding: 6px 14px; font-size: 15px; font-weight: 500; }
+main { flex: 1; padding: 12px 20px 110px; display: flex; flex-direction: column; gap: 16px; }
+h2 { font-family: var(--font-display); font-weight: 600; font-size: 24px; margin: 0; text-wrap: balance; }
+p { margin: 0; text-wrap: pretty; }
+.quiet { color: var(--muted); font-size: 15px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+.btn {
+  appearance: none; border: 0; cursor: pointer; font: inherit; font-weight: 500;
+  min-height: 56px; padding: 12px 20px; border-radius: 16px; width: 100%;
+  background: var(--soft); color: var(--ink); font-size: 18px;
+}
+.btn:focus-visible, .chipbtn:focus-visible, .tab:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); font-family: var(--font-display); font-size: 26px; min-height: 132px; border-radius: 26px; font-weight: 600; }
+.btn.big { min-height: 96px; font-size: 24px; font-family: var(--font-display); border: 2px solid var(--accent); background: var(--surface); }
+.btn.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+.btn.small { min-height: 44px; font-size: 16px; width: auto; padding: 8px 16px; }
+.row { display: flex; gap: 12px; }
+.row > * { flex: 1; }
+.chips { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.chipbtn { appearance: none; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-size: 17px; min-height: 56px; border-radius: 14px; cursor: pointer; padding: 6px; }
+.chipbtn:active { background: var(--soft); }
+.tabs { position: fixed; bottom: 0; inset-inline: 0; background: var(--surface); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); }
+.tabs .inner { max-width: 520px; margin: 0 auto; display: flex; }
+.tab { flex: 1; appearance: none; background: none; border: 0; font: inherit; font-size: 16px; color: var(--muted); min-height: 60px; cursor: pointer; }
+.tab[aria-current="page"] { color: var(--accent); font-weight: 700; box-shadow: inset 0 3px 0 var(--accent); }
+.timer { align-items: center; text-align: center; gap: 18px; }
+.timer .vis { width: 100%; max-width: 300px; }
+.timer .clock { font-family: var(--font-display); font-weight: 500; font-size: 64px; font-variant-numeric: tabular-nums; line-height: 1; direction: ltr; }
+.v-ring .track { stroke: var(--soft); } .v-ring .bar { stroke: var(--accent); }
+.v-arc .track { stroke: var(--soft); } .v-arc .bar { stroke: var(--indigo); }
+.v-fill .box { fill: var(--soft); } .v-fill .lvl { fill: var(--indigo); }
+.v-dots circle { fill: var(--gold); }
+.slider { width: 100%; accent-color: var(--accent); height: 44px; }
+.big-num { font-family: var(--font-display); font-weight: 600; font-size: 56px; line-height: 1; font-variant-numeric: tabular-nums; }
+.ends { display: flex; justify-content: space-between; color: var(--muted); font-size: 14px; }
+.bars { display: flex; flex-direction: column; gap: 10px; }
+.bar-row { display: grid; grid-template-columns: 70px 1fr 40px; align-items: center; gap: 10px; font-size: 15px; }
+.bar-track { background: var(--soft); border-radius: 8px; height: 14px; overflow: hidden; }
+.bar-fill { height: 100%; background: var(--accent); border-radius: 8px; }
+.bar-fill.alt { background: var(--indigo); }
+.chart text { fill: var(--muted); font-size: 11px; font-family: var(--font-body); }
+.chart .grid { stroke: var(--line); stroke-width: 1; }
+.chart .line { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; }
+.chart .area { fill: var(--accent); opacity: .12; }
+.chart .dot { fill: var(--accent); }
+.chart .val { fill: var(--ink); font-size: 13px; font-weight: 700; }
+.toast { position: fixed; inset-inline: 0; bottom: 84px; margin: 0 auto; width: max-content; max-width: 90%; background: var(--ink); color: var(--bg); padding: 10px 18px; border-radius: 999px; font-size: 16px; }
+textarea { width: 100%; min-height: 90px; font: inherit; font-size: 14px; direction: ltr; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 12px; padding: 10px; }
+.switch { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.switch input { width: 28px; height: 28px; accent-color: var(--accent); }
+.stepper { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.stepper .val { font-family: var(--font-display); font-size: 22px; font-weight: 600; min-width: 90px; text-align: center; }
+.stepper .btn { width: 64px; min-height: 56px; font-size: 26px; }
+.banner { background: var(--soft); border-radius: 12px; padding: 10px 14px; font-size: 15px; }
+@media (prefers-reduced-motion: no-preference) { .btn, .chipbtn { transition: transform .08s; } .btn:active, .chipbtn:active { transform: scale(.98); } }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script id="core">
+/* ---- pure logic (tested separately) ---- */
+var DAY = 86400000;
+var TRIG = ['קפה', 'אחרי אוכל', 'הפסקה', 'שיחת טלפון', 'נהיגה', 'מתח', 'שעמום', 'חברה', 'אחר'];
+function dayIdx(ts) { var d = new Date(ts); return Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / DAY); }
+function countsByDay(events, kind) {
+  var m = new Map();
+  for (var i = 0; i < events.length; i++) {
+    var e = events[i];
+    if (e.kind !== kind) continue;
+    var k = dayIdx(e.t);
+    m.set(k, (m.get(k) || 0) + 1);
+  }
+  return m;
+}
+function firstDay(events) {
+  if (!events.length) return null;
+  var mn = Infinity;
+  for (var i = 0; i < events.length; i++) if (events[i].t < mn) mn = events[i].t;
+  return dayIdx(mn);
+}
+function movingAvg(events, endDay, win, fDay) {
+  var m = countsByDay(events, 'cig');
+  var start = Math.max(endDay - win + 1, fDay);
+  var n = endDay - start + 1;
+  if (n <= 0) return null;
+  var s = 0;
+  for (var d = start; d <= endDay; d++) s += m.get(d) || 0;
+  return s / n;
+}
+function series(events, nowTs, maxDays) {
+  var f = firstDay(events);
+  if (f === null) return [];
+  var today = dayIdx(nowTs);
+  var from = Math.max(f, today - maxDays + 1);
+  var out = [];
+  for (var d = from; d <= today; d++) out.push({ day: d, v: movingAvg(events, d, 7, f) });
+  return out;
+}
+function timerSeconds(stage, rnd) { return Math.max(30, Math.round(stage * 60 * (0.75 + 0.5 * rnd))); }
+function passedThisWeek(events, nowTs) {
+  var lim = nowTs - 7 * DAY, n = 0;
+  for (var i = 0; i < events.length; i++) if (events[i].kind === 'passed' && events[i].t > lim) n++;
+  return n;
+}
+function topTriggers(events, nowTs, days, limit) {
+  var lim = nowTs - days * DAY, m = {};
+  for (var i = 0; i < events.length; i++) {
+    var e = events[i];
+    if (e.t <= lim || !e.trigger) continue;
+    m[e.trigger] = (m[e.trigger] || 0) + 1;
+  }
+  return Object.keys(m).map(function (k) { return { name: k, n: m[k] }; })
+    .sort(function (a, b) { return b.n - a.n; }).slice(0, limit);
+}
+function expectVsActual(events, lastN) {
+  var pairs = events.filter(function (e) { return e.kind === 'cig' && typeof e.expect === 'number' && typeof e.actual === 'number'; }).slice(-lastN);
+  if (pairs.length < 3) return null;
+  var se = 0, sa = 0;
+  pairs.forEach(function (e) { se += e.expect; sa += e.actual; });
+  return { n: pairs.length, expect: se / pairs.length, actual: sa / pairs.length };
+}
+var MAP_DAYS = 7;
+function mapDay(mapStart, nowTs) { return mapStart == null ? 1 : dayIdx(nowTs) - mapStart + 1; }
+function clampInt(v, lo, hi, def) { v = Number(v); if (!isFinite(v)) return def; v = Math.round(v); return Math.max(lo, Math.min(hi, v)); }
+function validEvent(e) {
+  if (!e || typeof e !== 'object') return false;
+  if (typeof e.t !== 'number' || !isFinite(e.t)) return false;
+  if (e.kind !== 'cig' && e.kind !== 'passed') return false;
+  return true;
+}
+function cleanEvent(e) {
+  var o = { t: e.t, kind: e.kind };
+  if (typeof e.trigger === 'string' && TRIG.indexOf(e.trigger) >= 0) o.trigger = e.trigger;
+  if (o.trigger === 'אחר' && typeof e.note === 'string' && e.note.trim()) o.note = e.note.trim().slice(0, 80);
+  if (typeof e.expect === 'number' && e.expect >= 0 && e.expect <= 10) o.expect = Math.round(e.expect);
+  if (typeof e.actual === 'number' && e.actual >= 0 && e.actual <= 10) o.actual = Math.round(e.actual);
+  if (typeof e.timerSec === 'number' && e.timerSec >= 0 && e.timerSec < 86400) o.timerSec = Math.round(e.timerSec);
+  return o;
+}
+function normalize(o) {
+  o = (o && typeof o === 'object') ? o : {};
+  var act = o.active;
+  var okAct = act && typeof act.start === 'number' && typeof act.dur === 'number' && act.dur > 0 && act.dur < 7200;
+  return {
+    stage: clampInt(o.stage, 0, 15, 0),
+    quick: !!o.quick,
+    mapStart: (typeof o.mapStart === 'number' && isFinite(o.mapStart)) ? Math.round(o.mapStart) : null,
+    mapNotice: !!o.mapNotice,
+    lastStyle: typeof o.lastStyle === 'string' ? o.lastStyle : '',
+    events: Array.isArray(o.events) ? o.events.filter(validEvent).map(cleanEvent) : [],
+    active: okAct ? { start: act.start, dur: act.dur, style: typeof act.style === 'string' ? act.style : 'ring', tip: typeof act.tip === 'number' ? act.tip : 0 } : null
+  };
+}
+function fmtClock(sec) {
+  sec = Math.max(0, Math.ceil(sec));
+  var m = Math.floor(sec / 60), s = sec % 60;
+  return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+}
+</script>
+
+<script id="appjs">
+(function () {
+  var KEY = 'raga.v1';
+  var STYLES = ['ring', 'fill', 'dots', 'arc'];
+  var TIPS = ['להסתכל על הדחף בלי לעשות איתו כלום.', 'לשתות מים לאט.', 'לקום ולשנות מקום.', 'שלוש נשימות עמוקות.', 'לנער את הידיים, לפתוח את הכתפיים.', 'לשים לב איפה בגוף הדחף יושב.'];
+  var storageOk = true;
+  var S;
+  var ui = { screen: 'home', ctx: null, toast: '', confirmDel: false, confirmRestore: false };
+  var tickId = null, wake = null;
+
+  function load() {
+    try { var r = localStorage.getItem(KEY); if (r) return normalize(JSON.parse(r)); } catch (e) { storageOk = false; }
+    return normalize({});
+  }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { storageOk = false; } }
+  function $(sel) { return document.querySelector(sel); }
+  function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function ensureMapStart() {
+    if (S.stage === 0 && S.mapStart == null) {
+      var f = firstDay(S.events);
+      S.mapStart = f === null ? dayIdx(Date.now()) : f;
+      save();
+    }
+  }
+  function checkMapping() {
+    ensureMapStart();
+    if (S.stage === 0 && mapDay(S.mapStart, Date.now()) > MAP_DAYS) { S.stage = 1; S.mapNotice = true; save(); }
+  }
+  function stageLabel() { return S.stage === 0 ? 'מיפוי' : (S.stage + ' דקות'); }
+  function toast(msg) {
+    ui.toast = msg; render();
+    setTimeout(function () { if (ui.toast === msg) { ui.toast = ''; var t = $('.toast'); if (t) t.remove(); } }, 2200);
+  }
+
+  /* ---------- timer ---------- */
+  function startTimer() {
+    if (S.stage < 1) return;
+    var choices = STYLES.filter(function (s) { return s !== S.lastStyle; });
+    var style = choices[Math.floor(Math.random() * choices.length)];
+    S.lastStyle = style;
+    S.active = { start: Date.now(), dur: timerSeconds(S.stage, Math.random()), style: style, tip: Math.floor(Math.random() * TIPS.length) };
+    save();
+    ui.screen = 'timer';
+    try { if (navigator.wakeLock) navigator.wakeLock.request('screen').then(function (w) { wake = w; }).catch(function () {}); } catch (e) {}
+    startTick(); render();
+  }
+  function startTick() { stopTick(); tickId = setInterval(tick, 250); }
+  function stopTick() { if (tickId) { clearInterval(tickId); tickId = null; } }
+  function remaining() { return S.active ? (S.active.start + S.active.dur * 1000 - Date.now()) / 1000 : 0; }
+  function tick() {
+    if (ui.screen !== 'timer' || !S.active) { stopTick(); return; }
+    var r = remaining();
+    if (r <= 0) { stopTick(); releaseWake(); ui.screen = 'ask'; render(); return; }
+    var c = $('#clock'); if (c) c.textContent = fmtClock(r);
+    var v = $('#vis'); if (v) v.innerHTML = visual(S.active.style, 1 - r / S.active.dur);
+  }
+  function releaseWake() { try { if (wake) { wake.release(); wake = null; } } catch (e) {} }
+  function visual(style, p) {
+    p = Math.max(0, Math.min(1, p));
+    if (style === 'ring') {
+      var c = 2 * Math.PI * 90;
+      return '<svg class="v-ring" viewBox="0 0 220 220" role="img" aria-label="טיימר"><circle class="track" cx="110" cy="110" r="90" fill="none" stroke-width="14"/><circle class="bar" cx="110" cy="110" r="90" fill="none" stroke-width="14" stroke-linecap="round" stroke-dasharray="' + c.toFixed(1) + '" stroke-dashoffset="' + (c * p).toFixed(1) + '" transform="rotate(-90 110 110)"/></svg>';
+    }
+    if (style === 'arc') {
+      return '<svg class="v-arc" viewBox="0 0 220 130" role="img" aria-label="טיימר"><path class="track" d="M20 115 A90 90 0 0 1 200 115" fill="none" stroke-width="16" stroke-linecap="round"/><path class="bar" d="M20 115 A90 90 0 0 1 200 115" fill="none" stroke-width="16" stroke-linecap="round" pathLength="100" stroke-dasharray="100" stroke-dashoffset="' + (100 * p).toFixed(2) + '"/></svg>';
+    }
+    if (style === 'fill') {
+      var h = 150 * (1 - p);
+      return '<svg class="v-fill" viewBox="0 0 220 170" role="img" aria-label="טיימר"><defs><clipPath id="cp"><rect x="40" y="10" width="140" height="150" rx="28"/></clipPath></defs><rect class="box" x="40" y="10" width="140" height="150" rx="28"/><rect class="lvl" x="40" y="' + (10 + 150 - h).toFixed(1) + '" width="140" height="' + h.toFixed(1) + '" clip-path="url(#cp)"/></svg>';
+    }
+    var out = '<svg class="v-dots" viewBox="0 0 220 150" role="img" aria-label="טיימר">', n = 30, lit = Math.floor((1 - p) * n + 0.999);
+    for (var i = 0; i < n; i++) {
+      var col = i % 6, row = Math.floor(i / 6);
+      out += '<circle cx="' + (20 + col * 36) + '" cy="' + (20 + row * 28) + '" r="9" opacity="' + (i < lit ? 1 : 0.15) + '"/>';
+    }
+    return out + '</svg>';
+  }
+
+  /* ---------- records ---------- */
+  function record(kind, extra) {
+    var e = { t: Date.now(), kind: kind };
+    var x = extra || {};
+    if (x.trigger) e.trigger = x.trigger;
+    if (x.note) e.note = x.note;
+    if (typeof x.expect === 'number') e.expect = x.expect;
+    if (typeof x.actual === 'number') e.actual = x.actual;
+    if (typeof x.timerSec === 'number') e.timerSec = x.timerSec;
+    S.events.push(cleanEvent(e));
+    S.active = null;
+    save();
+  }
+  function finish(trigger, note) {
+    var c = ui.ctx || {};
+    record(c.outcome, { trigger: trigger, note: note, expect: c.expect, actual: c.actual, timerSec: c.timerSec });
+    ui.ctx = null; ui.screen = 'home';
+    toast('נרשם.');
+  }
+
+  /* ---------- screens ---------- */
+  function header() { return '<header class="top"><h1>רגע</h1><span class="chip">שלב: ' + esc(stageLabel()) + '</span></header>'; }
+  function tabs() {
+    var cur = ui.screen === 'stats' ? 'stats' : ui.screen === 'settings' ? 'settings' : 'home';
+    function t(id, label) { return '<button class="tab" data-act="tab-' + id + '"' + (cur === id ? ' aria-current="page"' : '') + '>' + label + '</button>'; }
+    return '<nav class="tabs" aria-label="ניווט"><div class="inner">' + t('home', 'בית') + t('stats', 'מגמה') + t('settings', 'הגדרות') + '</div></nav>';
+  }
+  function sliderBlock(id, val) {
+    return '<div class="card"><div class="big-num" id="sval" style="text-align:center">' + val + '</div>' +
+      '<input class="slider" id="' + id + '" type="range" min="0" max="10" step="1" value="' + val + '" aria-label="דירוג 0 עד 10">' +
+      '<div class="ends"><span>אין הקלה</span><span>הקלה מלאה</span></div></div>';
+  }
+  function screenHome() {
+    var n = passedThisWeek(S.events, Date.now());
+    var first = S.events.length === 0;
+    var h = '<main>';
+    if (S.mapNotice) h += '<div class="card"><h2>שבוע המיפוי הושלם</h2><p>מעכשיו כל דחף מתחיל טיימר של דקה. אפשר לשנות את השלב בהגדרות.</p><button class="btn small" data-act="notice-ok">הבנתי</button></div>';
+    if (!storageOk) h += '<div class="banner">הדפדפן הזה לא שומר נתונים. הרישומים יאבדו כשתסגור את הדף.</div>';
+    if (S.stage === 0) {
+      h += '<button class="btn primary" data-act="smoked">עישנתי</button>';
+      h += '<p class="quiet">שלב המיפוי: יום ' + Math.max(1, mapDay(S.mapStart, Date.now())) + ' מתוך ' + MAP_DAYS + '. רושמים כל סיגריה עם הטריגר שלה, בלי לשנות דבר. אחרי שבעה ימים האפליקציה עוברת לשלב הראשון.</p>';
+    } else {
+      h += '<button class="btn primary" data-act="urge">עולה לי רצון</button>';
+      h += '<button class="btn" data-act="smoked">עישנתי</button>';
+      if (n > 0) h += '<p class="quiet">השבוע חלפו ' + n + ' דחפים בלי סיגריה.</p>';
+    }
+    if (first) {
+      h += '<div class="card"><h2>איך זה עובד</h2><p>לחיצה על "עולה לי רצון" מפעילה טיימר. בסופו בוחרים אם עדיין רוצים. כל דקה שחולפת היא הצלחה, ואין מעידות ואין איפוס.</p></div>';
+    }
+    return h + '</main>';
+  }
+  function screenTimer() {
+    var a = S.active;
+    return '<main class="timer"><p class="quiet">הדחף יחלוף גם בלי סיגריה.</p><div class="vis" id="vis">' + visual(a.style, 1 - remaining() / a.dur) + '</div>' +
+      '<div class="clock" id="clock">' + fmtClock(remaining()) + '</div><p>' + esc(TIPS[a.tip % TIPS.length]) + '</p>' +
+      '<button class="btn ghost small" data-act="cancel">ביטול</button></main>';
+  }
+  function screenAsk() {
+    return '<main><h2>עדיין רוצה?</h2><div class="row"><button class="btn big" data-act="want-yes">כן</button><button class="btn big" data-act="want-no">לא עכשיו</button></div></main>';
+  }
+  function screenExpect() {
+    return '<main><h2>לפני שמעשנים: כמה הקלה אתה מצפה לקבל?</h2>' + sliderBlock('sl', 5) +
+      '<button class="btn" data-act="expect-ok">המשך</button><button class="btn ghost" data-act="expect-skip">דלג</button></main>';
+  }
+  function screenSmoking() {
+    return '<main><h2>עשן בתשומת לב</h2><p>בלי מסך ובלי לעשות דבר נוסף. מה אתה מרגיש בגוף, בטעם ובריח?</p><button class="btn" data-act="done-smoking">סיימתי</button></main>';
+  }
+  function screenActual() {
+    return '<main><h2>כמה הקלה קיבלת בפועל?</h2>' + sliderBlock('sl', 5) +
+      '<button class="btn" data-act="actual-ok">המשך</button><button class="btn ghost" data-act="actual-skip">דלג</button></main>';
+  }
+  function screenOther() {
+    return '<main><h2>מה היה הטריגר?</h2><input id="note" type="text" maxlength="80" autocomplete="off" placeholder="כתוב כאן" style="width:100%;min-height:56px;font:inherit;font-size:18px;padding:10px 14px;border-radius:14px;border:1px solid var(--line);background:var(--surface);color:var(--ink)">' +
+      '<button class="btn" data-act="other-ok">שמור</button><button class="btn ghost" data-act="other-skip">שמור בלי פירוט</button></main>';
+  }
+  function screenTrigger() {
+    var h = '<main><h2>מה היה הטריגר?</h2><div class="chips">';
+    TRIG.forEach(function (t) { h += '<button class="chipbtn" data-act="trig" data-v="' + esc(t) + '">' + esc(t) + '</button>'; });
+    return h + '</div><button class="btn ghost" data-act="trig-skip">דלג</button></main>';
+  }
+  function chart() {
+    var ser = series(S.events, Date.now(), 56);
+    if (ser.length < 3) return '<p class="quiet">הקו יופיע אחרי כמה ימים של רישום.</p>';
+    var W = 320, H = 170, L = 30, R = 12, T = 18, B = 26;
+    var mx = 0; ser.forEach(function (p) { if (p.v > mx) mx = p.v; });
+    mx = Math.max(1, Math.ceil(mx));
+    var xs = function (i) { return L + (W - L - R) * (i / (ser.length - 1)); };
+    var ys = function (v) { return T + (H - T - B) * (1 - v / mx); };
+    var pts = ser.map(function (p, i) { return xs(i).toFixed(1) + ',' + ys(p.v).toFixed(1); });
+    var area = pts.join(' ') + ' ' + xs(ser.length - 1).toFixed(1) + ',' + ys(0).toFixed(1) + ' ' + xs(0).toFixed(1) + ',' + ys(0).toFixed(1);
+    var last = ser[ser.length - 1];
+    var fmtD = function (d) { var dt = new Date(d * DAY); return dt.getUTCDate() + '/' + (dt.getUTCMonth() + 1); };
+    var svg = '<svg class="chart" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="ממוצע נע של 7 ימים, סיגריות ליום">';
+    [0, 0.5, 1].forEach(function (f) {
+      var y = ys(mx * f);
+      svg += '<line class="grid" x1="' + L + '" x2="' + (W - R) + '" y1="' + y.toFixed(1) + '" y2="' + y.toFixed(1) + '"/><text x="' + (L - 6) + '" y="' + (y + 4).toFixed(1) + '" text-anchor="end">' + (mx * f).toFixed(mx * f % 1 ? 1 : 0) + '</text>';
+    });
+    svg += '<polygon class="area" points="' + area + '"/><polyline class="line" points="' + pts.join(' ') + '"/>';
+    svg += '<circle class="dot" cx="' + xs(ser.length - 1).toFixed(1) + '" cy="' + ys(last.v).toFixed(1) + '" r="5"/>';
+    svg += '<text class="val" x="' + xs(ser.length - 1).toFixed(1) + '" y="' + (ys(last.v) - 10).toFixed(1) + '" text-anchor="middle">' + last.v.toFixed(1) + '</text>';
+    svg += '<text x="' + L + '" y="' + (H - 6) + '" text-anchor="start">' + fmtD(ser[0].day) + '</text><text x="' + (W - R) + '" y="' + (H - 6) + '" text-anchor="end">' + fmtD(last.day) + '</text></svg>';
+    return svg;
+  }
+  function screenStats() {
+    var h = '<main><h2>מגמה</h2>';
+    if (!S.events.length) return h + '<p class="quiet">עוד אין רישומים. אחרי הסיגריה או הדחף הראשון יופיעו כאן המגמות.</p></main>';
+    var f = firstDay(S.events), today = dayIdx(Date.now());
+    var avg = movingAvg(S.events, today, 7, f);
+    h += '<div class="card"><p class="quiet">ממוצע ב-7 הימים האחרונים</p><div class="big-num">' + avg.toFixed(1) + '</div><p class="quiet">סיגריות ליום</p>' + chart() + '</div>';
+    var n = passedThisWeek(S.events, Date.now());
+    h += '<div class="card"><p class="quiet">דחפים שחלפו בלי סיגריה, השבוע</p><div class="big-num">' + n + '</div></div>';
+    var tt = topTriggers(S.events, Date.now(), 14, 4);
+    if (tt.length) {
+      var mxn = tt[0].n;
+      h += '<div class="card"><p class="quiet">הטריגרים השכיחים, שבועיים אחרונים</p><div class="bars">';
+      tt.forEach(function (t) { h += '<div class="bar-row"><span>' + esc(t.name) + '</span><div class="bar-track"><div class="bar-fill" style="width:' + Math.round(100 * t.n / mxn) + '%"></div></div><span>' + t.n + '</span></div>'; });
+      h += '</div></div>';
+    }
+    var notes = [];
+    for (var i = S.events.length - 1; i >= 0 && notes.length < 5; i--) { var nt = S.events[i].note; if (nt && notes.indexOf(nt) < 0) notes.push(nt); }
+    if (notes.length) h += '<div class="card"><p class="quiet">מה שרשמת תחת "אחר"</p><p>' + notes.map(esc).join(' · ') + '</p></div>';
+    var ev = expectVsActual(S.events, 30);
+    if (ev) {
+      h += '<div class="card"><p class="quiet">מה שהסיגריה הבטיחה מול מה שקיבלת (ממוצע, ' + ev.n + ' סיגריות)</p><div class="bars">' +
+        '<div class="bar-row"><span>ציפיתי</span><div class="bar-track"><div class="bar-fill alt" style="width:' + (ev.expect * 10) + '%"></div></div><span>' + ev.expect.toFixed(1) + '</span></div>' +
+        '<div class="bar-row"><span>קיבלתי</span><div class="bar-track"><div class="bar-fill" style="width:' + (ev.actual * 10) + '%"></div></div><span>' + ev.actual.toFixed(1) + '</span></div></div></div>';
+    }
+    return h + '</main>';
+  }
+  function screenSettings() {
+    var backup = JSON.stringify({ stage: S.stage, events: S.events });
+    var h = '<main><h2>הגדרות</h2><div class="card"><p><strong>שלב</strong></p><div class="stepper"><button class="btn" data-act="stage-minus" aria-label="שלב קודם">−</button><span class="val">' + esc(stageLabel()) + '</span><button class="btn" data-act="stage-plus" aria-label="שלב הבא">+</button></div>' +
+      '<p class="quiet">מיפוי: רישום בלי טיימר, שבעה ימים בדיוק, ואז עוברים אוטומטית לשלב 1. אחר כך כל שלב הוא משך הטיימר בדקות, עד 15. הטיימר משתנה סביב הערך הזה, ואתה קובע מתי לעלות.</p>' + (S.stage === 0 ? '<button class="btn small" data-act="map-restart">התחל את שבוע המיפוי מחדש מהיום</button>' : '') + '</div>';
+    h += '<div class="card"><label class="switch"><span>פתיחה מהירה: האפליקציה נפתחת ישר לטיימר</span><input type="checkbox" id="quick"' + (S.quick ? ' checked' : '') + '></label>' +
+      '<p class="quiet">לשימוש עם קיצור במסך הבית. אפשר תמיד לבטל את הטיימר.</p></div>';
+    h += '<div class="card"><p><strong>קיצור במסך הבית</strong></p><p class="quiet">בכרום: תפריט (שלוש נקודות) ← "התקנת אפליקציה". האפליקציה תופיע עם אייקון, ותיפתח במסך מלא בלי דפדפן. לחיצה ארוכה על האייקון נותנת קיצור "עולה לי רצון" ישר לטיימר.</p></div>';
+    h += '<div class="card"><p><strong>גיבוי</strong></p><p class="quiet">הנתונים נשמרים בדפדפן בטלפון הזה בלבד. העתק את הטקסט ושמור אותו אצלך.</p><textarea id="bk" readonly>' + esc(backup) + '</textarea><div class="row"><button class="btn small" data-act="copy-bk">העתק</button></div>' +
+      '<p class="quiet">שחזור: הדבק גיבוי כאן.</p><textarea id="rs" placeholder="הדבק כאן"></textarea><button class="btn small" data-act="restore">' + (ui.confirmRestore ? 'לחץ שוב לאישור, זה מחליף את הנתונים הקיימים' : 'שחזר') + '</button></div>';
+    h += '<div class="card"><button class="btn ghost" data-act="wipe">' + (ui.confirmDel ? 'לחץ שוב לאישור מחיקה סופית' : 'מחיקת כל הנתונים') + '</button></div></main>';
+    return h;
+  }
+
+  function render() {
+    if (!S.active || ui.screen === 'home') checkMapping();
+    var body;
+    switch (ui.screen) {
+      case 'timer': body = screenTimer(); break;
+      case 'ask': body = screenAsk(); break;
+      case 'expect': body = screenExpect(); break;
+      case 'smoking': body = screenSmoking(); break;
+      case 'actual': body = screenActual(); break;
+      case 'trigger': body = screenTrigger(); break;
+      case 'other': body = screenOther(); break;
+      case 'stats': body = screenStats(); break;
+      case 'settings': body = screenSettings(); break;
+      default: body = screenHome();
+    }
+    var flow = ['timer', 'ask', 'expect', 'smoking', 'actual', 'trigger', 'other'].indexOf(ui.screen) >= 0;
+    $('#app').innerHTML = header() + body + (flow ? '' : tabs()) + (ui.toast ? '<div class="toast" role="status">' + esc(ui.toast) + '</div>' : '');
+    var sl = $('#sl');
+    if (sl) sl.addEventListener('input', function () { $('#sval').textContent = sl.value; });
+    var ni = $('#note');
+    if (ni) ni.addEventListener('keydown', function (e) { if (e.key === 'Enter') finish('אחר', ni.value); });
+    var q = $('#quick');
+    if (q) q.addEventListener('change', function () { S.quick = q.checked; save(); });
+  }
+
+  /* ---------- actions ---------- */
+  function sliderVal() { var sl = $('#sl'); return sl ? Number(sl.value) : undefined; }
+  document.addEventListener('click', function (ev) {
+    var b = ev.target.closest('[data-act]');
+    if (!b) return;
+    var a = b.getAttribute('data-act');
+    if (a !== 'wipe') ui.confirmDel = false;
+    if (a !== 'restore') ui.confirmRestore = false;
+    var c = ui.ctx || {};
+    switch (a) {
+      case 'tab-home': ui.screen = 'home'; render(); break;
+      case 'tab-stats': ui.screen = 'stats'; render(); break;
+      case 'tab-settings': ui.screen = 'settings'; render(); break;
+      case 'urge': startTimer(); break;
+      case 'smoked': ui.ctx = { outcome: 'cig', direct: true }; ui.screen = S.stage === 0 ? 'trigger' : 'actual'; render(); break;
+      case 'cancel': stopTick(); releaseWake(); S.active = null; save(); ui.screen = 'home'; render(); break;
+      case 'want-no': ui.ctx = { outcome: 'passed', timerSec: S.active ? S.active.dur : undefined }; ui.screen = 'trigger'; render(); break;
+      case 'want-yes': ui.ctx = { outcome: 'cig', timerSec: S.active ? S.active.dur : undefined }; ui.screen = 'expect'; render(); break;
+      case 'expect-ok': c.expect = sliderVal(); ui.ctx = c; ui.screen = 'smoking'; render(); break;
+      case 'expect-skip': ui.screen = 'smoking'; render(); break;
+      case 'done-smoking': ui.screen = 'actual'; render(); break;
+      case 'actual-ok': c.actual = sliderVal(); ui.ctx = c; ui.screen = 'trigger'; render(); break;
+      case 'actual-skip': ui.screen = 'trigger'; render(); break;
+      case 'trig':
+        if (b.getAttribute('data-v') === 'אחר') { ui.screen = 'other'; render(); var ni = $('#note'); if (ni) ni.focus(); }
+        else finish(b.getAttribute('data-v'));
+        break;
+      case 'other-ok': finish('אחר', ($('#note') || {}).value); break;
+      case 'other-skip': finish('אחר'); break;
+      case 'trig-skip': finish(undefined); break;
+      case 'notice-ok': S.mapNotice = false; save(); render(); break;
+      case 'map-restart': S.stage = 0; S.mapStart = dayIdx(Date.now()); S.mapNotice = false; save(); toast('שבוע המיפוי התחיל מהיום.'); break;
+      case 'stage-minus': S.stage = Math.max(0, S.stage - 1); if (S.stage === 0) S.mapStart = dayIdx(Date.now()); save(); render(); break;
+      case 'stage-plus': S.stage = Math.min(15, S.stage + 1); S.mapNotice = false; save(); render(); break;
+      case 'copy-bk':
+        try { navigator.clipboard.writeText($('#bk').value).then(function () { toast('הועתק.'); }, function () { $('#bk').select(); toast('סמן והעתק ידנית.'); }); }
+        catch (e) { $('#bk').select(); toast('סמן והעתק ידנית.'); }
+        break;
+      case 'restore':
+        if (!ui.confirmRestore) { ui.confirmRestore = true; render(); break; }
+        try {
+          var o = JSON.parse($('#rs').value);
+          var n = normalize({ stage: o.stage, events: o.events, quick: S.quick });
+          if (!n.events.length) throw new Error('empty');
+          S = n; save(); ui.confirmRestore = false; toast('שוחזר.');
+        } catch (e) { ui.confirmRestore = false; toast('הטקסט לא נראה כמו גיבוי.'); }
+        break;
+      case 'wipe':
+        if (!ui.confirmDel) { ui.confirmDel = true; render(); break; }
+        S = normalize({}); save(); ui.confirmDel = false; toast('הנתונים נמחקו.');
+        break;
+    }
+  });
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible' && !S.active) { var was = S.stage; checkMapping(); if (was !== S.stage) render(); }
+    if (document.visibilityState === 'visible' && ui.screen === 'timer' && S.active && remaining() <= 0) { ui.screen = 'ask'; render(); }
+  });
+
+  /* ---------- offline / install ---------- */
+  try { if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(function () {}); } catch (e) {}
+
+  /* ---------- boot ---------- */
+  S = load();
+  checkMapping();
+  if (S.active) {
+    ui.screen = remaining() <= 0 ? 'ask' : 'timer';
+    ui.ctx = null;
+    if (ui.screen === 'timer') startTick();
+  } else if (S.stage >= 1 && (S.quick || location.hash === '#start')) {
+    startTimer();
+    return;
+  }
+  render();
+})();
+</script>
+</body>
+</html>
