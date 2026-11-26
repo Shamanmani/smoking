@@ -414,7 +414,6 @@ function fmtClock(sec) {
     var first = S.events.length === 0;
     var h = '<main>';
     if (S.mapNotice) h += '<div class="card"><h2>שבוע המיפוי הושלם</h2><p>מעכשיו כל דחף מתחיל טיימר של דקה. אפשר לשנות את השלב בהגדרות.</p><button class="btn small" data-act="notice-ok">הבנתי</button></div>';
-    if (cloudOn() && !S.share.asked && S.events.length >= 1) h += consentCard();
     if (!storageOk) h += '<div class="banner">הדפדפן הזה לא שומר נתונים. הרישומים יאבדו כשתסגור את הדף.</div>';
     if (S.stage === 0) {
       h += '<button class="btn primary" data-act="smoked">עישנתי</button>';
@@ -528,6 +527,7 @@ function fmtClock(sec) {
   function render() {
     if (!S.active || ui.screen === 'home') checkMapping();
     var body;
+    var needConsent = cloudOn() && !S.share.asked && ui.screen === 'home';
     switch (ui.screen) {
       case 'timer': body = screenTimer(); break;
       case 'ask': body = screenAsk(); break;
@@ -538,9 +538,9 @@ function fmtClock(sec) {
       case 'other': body = screenOther(); break;
       case 'stats': body = screenStats(); break;
       case 'settings': body = screenSettings(); break;
-      default: body = screenHome();
+      default: body = needConsent ? '<main>' + consentCard() + '</main>' : screenHome();
     }
-    var flow = ['timer', 'ask', 'expect', 'smoking', 'actual', 'trigger', 'other'].indexOf(ui.screen) >= 0;
+    var flow = needConsent || ['timer', 'ask', 'expect', 'smoking', 'actual', 'trigger', 'other'].indexOf(ui.screen) >= 0;
     $('#app').innerHTML = header() + body + (flow ? '' : tabs()) + (ui.toast ? '<div class="toast" role="status">' + esc(ui.toast) + '</div>' : '');
     var sl = $('#sl');
     if (sl) sl.addEventListener('input', function () { $('#sval').textContent = sl.value; });
